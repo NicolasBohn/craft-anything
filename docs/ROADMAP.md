@@ -2420,7 +2420,7 @@ Owner: open · Status: in progress
 - [x] Keep the sBPF symbol and relocation output limits global across repeated ELF tables.
       — claimed: Afloat16, branch bugfix/r3.12-sbpf-table-records
 - [x] Bound retained PE import/export name and forwarder bytes across repeated references; preserve bounded prefixes and report byte-budget truncation.
-- [ ] Refuse padded and unterminated subidentifiers and cut-off arc lists in code-signature requirement OIDs instead of showing a different OID, and split a long first subidentifier.
+- [x] Refuse padded and unterminated subidentifiers and cut-off arc lists in code-signature requirement OIDs instead of showing a different OID, and split a long first subidentifier.
       — claimed: NicolasBohn, branch bugfix/r3.12-codesign-oid-subidentifiers
 
 
