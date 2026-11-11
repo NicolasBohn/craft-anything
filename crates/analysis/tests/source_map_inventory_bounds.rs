@@ -189,9 +189,12 @@ fn a_stand_alone_map_beside_its_script_is_read() {
 #[test]
 fn other_map_files_are_listed_but_not_read() {
     let map = serde_json::to_vec(&json!({"version": 3, "sources": ["src/a.js"], "mappings": ""})).unwrap();
-    // A game level, a leftover map with no script beside it, and one not loaded.
-    let graph = graph_with(vec![("levels/world.map", b"P3 10 10"), ("old/gone.js.map", map.as_slice())], &["big/level.map"]);
-    assert_eq!(graph.source_maps.len(), 3);
+    // A game level, a leftover map with no script beside it, a broken map beside a page, and one not loaded.
+    let graph = graph_with(
+        vec![("levels/world.map", b"P3 10 10"), ("old/gone.js.map", map.as_slice()), ("index.html", b"<p>hi</p>"), ("index.html.map", b"{")],
+        &["big/level.map"],
+    );
+    assert_eq!(graph.source_maps.len(), 4);
     assert!(graph.source_maps.iter().all(|m| m.sources.is_empty() && !m.unreadable && !m.sources_truncated));
     assert!(!graph.limitations.iter().any(|(key, _)| key.starts_with("source_map")));
     let diff = diff_source_and_bundle(&source_graph(&["src/a.js"]), &graph, 100);
@@ -216,7 +219,8 @@ fn a_map_listed_with_a_leading_dot_slash_is_read_once() {
 #[test]
 fn a_map_listed_with_a_leading_dot_slash_but_not_loaded_is_unreadable() {
     let files = vec![AppFile { path: "dist/main.js".into(), bytes: b"//# sourceMappingURL=main.js.map\n".to_vec() }];
-    let listing = vec![("./dist/main.js".to_string(), 1), ("./dist/main.js.map".to_string(), 1)];
+    // The reader trims every leading `./`, so `././` lists the same file.
+    let listing = vec![("./dist/main.js".to_string(), 1), ("././dist/main.js.map".to_string(), 1)];
     let graph = analyze_application(&AppInput { files, listing, ..Default::default() }, &AppOptions::default(), &|| false).unwrap();
     assert_eq!(graph.source_maps.len(), 1, "{:?}", graph.source_maps);
     assert!(graph.source_maps[0].present && graph.source_maps[0].unreadable);

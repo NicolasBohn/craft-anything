@@ -973,13 +973,14 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
         g.source_maps.push(r);
     }
     // Stand-alone .map files without a comment pointing at them. Only one beside a script that was
-    // analysed is read: another may not be a source map at all, or its code may not ship.
+    // analysed is read: another (beside a page, a level, a stylesheet) may not be a source map at
+    // all, or its code may not ship.
     for (p, _) in &input.listing {
         let path = unprefixed(p);
         if path.ends_with(".map") && !path.contains("node_modules/") && !g.source_maps.iter().any(|s| s.resolved.as_deref() == Some(path)) {
             let script = path.trim_end_matches(".map");
             let mut r = SourceMapRef { script: script.to_string(), resolved: Some(path.to_string()), present: true, ..Default::default() };
-            if analysed.iter().any(|a| a.path == script) {
+            if is_script(script) && analysed.iter().any(|a| a.path == script) {
                 match input.files.iter().find(|f| f.path == path) {
                     Some(f) => read_source_map(&mut r, &f.bytes, script, &mut source_budget, &mut g.limitations),
                     None => mark_unreadable(&mut r, script, "it was listed but not loaded", &mut g.limitations),
@@ -1170,9 +1171,10 @@ fn mark_unreadable(r: &mut SourceMapRef, script: &str, why: &str, limitations: &
     limitations.push(("source_map_unreadable".into(), format!("The source map for {script} could not be read: {why}. Its sources are not listed.")));
 }
 
-/// An archive may list `./dist/a.js.map` and load it as `dist/a.js.map`, as the ZIP reader does.
+/// An archive may list `./dist/a.js.map` and load it as `dist/a.js.map`: the ZIP reader trims every
+/// leading `./` from the paths it loads, and this trims them the same way.
 fn unprefixed(listed: &str) -> &str {
-    listed.strip_prefix("./").unwrap_or(listed)
+    listed.trim_start_matches("./")
 }
 
 /// A refusal at one of the source-map parser's limits, as opposed to a map that is malformed.
