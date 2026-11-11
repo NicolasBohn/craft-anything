@@ -2179,6 +2179,7 @@ Owner: open · Status: in progress
 - [x] Bound retained path bytes in source-map recovery manifests before repeating expanded source roots, and report partial recovery.
       — claimed: AlexJoaquimPereira, branch bugfix/r3.12-source-recovery-path-budget-20261111
 - [ ] Bound the source-map parser's retained `sources`/`sourcesContent` entries before building millions of small strings from a 64 MiB map.
+      — claimed: NicolasBohn, branch bugfix/r3.12-sourcemap-entry-bounds
 - [x] Keep source map annotation URL suffixes intact.
       — claimed: Plastic-time, branch rrfz/bugfix-r3.12-annotation-20261110
 - [x] Keep DOS relocations inside the declared executable header.
