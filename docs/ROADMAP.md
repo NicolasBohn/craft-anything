@@ -2180,7 +2180,6 @@ Owner: open · Status: in progress
       — claimed: AlexJoaquimPereira, branch bugfix/r3.12-source-recovery-path-budget-20261111
 - [x] Bound the source-map parser's retained `sources`/`sourcesContent` entries before building millions of small strings from a 64 MiB map.
       — claimed: NicolasBohn, branch bugfix/r3.12-sourcemap-entry-bounds
-- [ ] Bound the number of index-map sections the source-map parser keeps; each section, even an empty external one, still becomes a map of its own.
 - [x] Keep source map annotation URL suffixes intact.
       — claimed: Plastic-time, branch rrfz/bugfix-r3.12-annotation-20261110
 - [x] Keep DOS relocations inside the declared executable header.
