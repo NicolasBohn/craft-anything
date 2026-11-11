@@ -111,3 +111,24 @@ fn missing_sources_without_maps_remain_unmatched() {
     assert_eq!(diff["summary"]["uncertain_sources"], 0);
     assert_eq!(diff["source_map_inventory_truncated"], false);
 }
+
+#[test]
+fn a_map_refused_for_too_many_entries_leaves_its_sources_uncertain() {
+    // More names than the parser keeps by default: the map is refused, not read as empty.
+    let names = vec!["\"\""; craft_anything_formats::sourcemap::Limits::default().max_entries + 1].join(",");
+    let map = format!("{{\"version\":3,\"sources\":[\"a.js\"],\"mappings\":\"\",\"names\":[{names}]}}").into_bytes();
+    let files = vec![
+        AppFile { path: "script-0.js".into(), bytes: b"//# sourceMappingURL=script-0.js.map\n".to_vec() },
+        AppFile { path: "script-0.js.map".into(), bytes: map },
+    ];
+    let listing = files.iter().map(|file| (file.path.clone(), file.bytes.len() as u64)).collect();
+    let graph = analyze_application(&AppInput { files, listing, ..Default::default() }, &AppOptions::default(), &|| false).unwrap();
+    let map = &graph.source_maps[0];
+    assert!(map.present);
+    assert!(map.sources.is_empty());
+    assert!(map.sources_truncated);
+    assert!(graph.limitations.iter().any(|(key, message)| key == "source_map_inventory_truncated" && message.contains("script-0.js")));
+    let diff = diff_source_and_bundle(&source_graph(&["a.js"]), &graph, 100);
+    assert_eq!(diff["unmatched_sources"], json!([]), "a refused map confirms nothing absent: {diff}");
+    assert_eq!(diff["uncertain_sources"], json!([{"source": "a.js", "reason": "source_map_inventory_truncated"}]));
+}

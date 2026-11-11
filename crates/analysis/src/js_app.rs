@@ -952,7 +952,17 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
         };
         if let Some(bytes) = map_bytes {
             r.present = true;
-            if let Ok(map) = craft_anything_formats::sourcemap::parse(&bytes, craft_anything_formats::sourcemap::Limits::default()) {
+            let parsed = craft_anything_formats::sourcemap::parse(&bytes, craft_anything_formats::sourcemap::Limits::default());
+            // A map refused for holding more entries than the parser keeps is incomplete, not
+            // empty: its sources are uncertain, never confirmed missing.
+            if let Err(craft_anything_formats::sourcemap::SourceMapError::TooManyEntries(_)) = parsed {
+                r.sources_truncated = true;
+                g.limitations.push((
+                    "source_map_inventory_truncated".into(),
+                    format!("The source map for {} has more entries than the parser keeps, so its sources are not listed.", a.path),
+                ));
+            }
+            if let Ok(map) = parsed {
                 let inventory = map.source_inventory(craft_anything_formats::sourcemap::InventoryLimits {
                     max_sources: source_budget.max_sources.min(5000),
                     max_bytes: source_budget.max_bytes,
