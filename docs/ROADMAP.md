@@ -2181,6 +2181,7 @@ Owner: open · Status: in progress
 - [ ] A malformed source map (`BadJson`, `BadVersion`, bad mappings or sections) and a stand-alone `.map` file without a
       comment pointing at it still leave their sources looking absent in an application graph: say they couldn't be read,
       so a source comparison doesn't confirm those sources missing.
+      — claimed: NicolasBohn, branch bugfix/r3.12-unreadable-source-maps
 - [x] Keep source map annotation URL suffixes intact.
       — claimed: Plastic-time, branch rrfz/bugfix-r3.12-annotation-20261110
 - [x] Keep DOS relocations inside the declared executable header.
