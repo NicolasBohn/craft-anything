@@ -964,7 +964,8 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
         } else if r.inline {
             mark_unreadable(&mut r, &a.path, "its data URL could not be decoded", &mut g.limitations);
         } else {
-            r.present = file_set.contains(r.resolved.as_deref().unwrap_or(""));
+            let resolved = r.resolved.as_deref().unwrap_or("");
+            r.present = file_set.contains(resolved) || input.listing.iter().any(|(p, _)| unprefixed(p) == resolved);
             if r.present {
                 mark_unreadable(&mut r, &a.path, "it was listed but not loaded", &mut g.limitations);
             }
@@ -974,8 +975,7 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
     // Stand-alone .map files without a comment pointing at them. Only one beside a script that was
     // analysed is read: another may not be a source map at all, or its code may not ship.
     for (p, _) in &input.listing {
-        // An archive may list `./dist/a.js.map` and load it as `dist/a.js.map`.
-        let path = p.trim_start_matches("./");
+        let path = unprefixed(p);
         if path.ends_with(".map") && !path.contains("node_modules/") && !g.source_maps.iter().any(|s| s.resolved.as_deref() == Some(path)) {
             let script = path.trim_end_matches(".map");
             let mut r = SourceMapRef { script: script.to_string(), resolved: Some(path.to_string()), present: true, ..Default::default() };
@@ -1168,6 +1168,11 @@ fn read_source_map(
 fn mark_unreadable(r: &mut SourceMapRef, script: &str, why: &str, limitations: &mut Vec<(String, String)>) {
     r.unreadable = true;
     limitations.push(("source_map_unreadable".into(), format!("The source map for {script} could not be read: {why}. Its sources are not listed.")));
+}
+
+/// An archive may list `./dist/a.js.map` and load it as `dist/a.js.map`, as the ZIP reader does.
+fn unprefixed(listed: &str) -> &str {
+    listed.strip_prefix("./").unwrap_or(listed)
 }
 
 /// A refusal at one of the source-map parser's limits, as opposed to a map that is malformed.

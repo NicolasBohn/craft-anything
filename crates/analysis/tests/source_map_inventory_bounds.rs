@@ -214,6 +214,17 @@ fn a_map_listed_with_a_leading_dot_slash_is_read_once() {
 }
 
 #[test]
+fn a_map_listed_with_a_leading_dot_slash_but_not_loaded_is_unreadable() {
+    let files = vec![AppFile { path: "dist/main.js".into(), bytes: b"//# sourceMappingURL=main.js.map\n".to_vec() }];
+    let listing = vec![("./dist/main.js".to_string(), 1), ("./dist/main.js.map".to_string(), 1)];
+    let graph = analyze_application(&AppInput { files, listing, ..Default::default() }, &AppOptions::default(), &|| false).unwrap();
+    assert_eq!(graph.source_maps.len(), 1, "{:?}", graph.source_maps);
+    assert!(graph.source_maps[0].present && graph.source_maps[0].unreadable);
+    let diff = diff_source_and_bundle(&source_graph(&["src/a.js"]), &graph, 100);
+    assert_eq!(diff["uncertain_sources"], json!([{"source": "src/a.js", "reason": "source_map_unreadable"}]));
+}
+
+#[test]
 fn graphs_saved_before_unreadable_maps_load() {
     let graph = graph_with_maps(vec![json!({"version": 3, "sources": ["a.js"], "mappings": ""})]);
     let mut saved = serde_json::to_value(&graph).unwrap();
