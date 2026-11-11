@@ -157,7 +157,7 @@ cheapest help we can give anyone, so nothing below should hold it up for long.
 - [x] A window that fails after it was shown no longer says "The next start will draw with …": its
       start mark is already gone, so the next start draws as before (#909 review); the dialog says
       it only when the window was never shown (`next_start_note`) — claimed: 00xJS, branch bugfix/r5.1-retry-text-after-shown
-- [ ] Add to `docs/releasing.md`: before publishing, a Deep build through Claude Code from the
+- [x] Add to `docs/releasing.md`: before publishing, a Deep build through Claude Code from the
       finished package, on a Mac and on Windows. Starting the CLI from the package (#91) doesn't
       show whether Claude Code accepts its tools — PR #982; claimed: doubektomas,
       branch docs/r5.1-packaged-deep-build-check. The checklist is documented; live package runs
