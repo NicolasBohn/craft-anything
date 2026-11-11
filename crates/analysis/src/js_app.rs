@@ -167,7 +167,8 @@ pub struct SourceMapRef {
     pub sources_truncated: bool,
     #[serde(default)]
     pub sources_with_content: usize,
-    /// The map exists but couldn't be read (malformed, or not loaded), so its sources are unknown.
+    /// The map is referenced by a script, or sits beside one, but couldn't be read (malformed, an
+    /// undecodable data URL, or listed but not loaded), so its sources are unknown.
     #[serde(default)]
     pub unreadable: bool,
 }
@@ -970,13 +971,19 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
         }
         g.source_maps.push(r);
     }
-    // Stand-alone .map files without a comment pointing at them.
+    // Stand-alone .map files without a comment pointing at them. Only one beside a script that was
+    // analysed is read: another may not be a source map at all, or its code may not ship.
     for (p, _) in &input.listing {
-        if p.ends_with(".map") && !p.contains("node_modules/") && !g.source_maps.iter().any(|s| s.resolved.as_deref() == Some(p.as_str())) {
-            let mut r = SourceMapRef { script: p.trim_end_matches(".map").to_string(), resolved: Some(p.clone()), present: true, ..Default::default() };
-            match input.files.iter().find(|f| f.path == *p) {
-                Some(f) => read_source_map(&mut r, &f.bytes, p, &mut source_budget, &mut g.limitations),
-                None => mark_unreadable(&mut r, p, "it was listed but not loaded", &mut g.limitations),
+        // An archive may list `./dist/a.js.map` and load it as `dist/a.js.map`.
+        let path = p.trim_start_matches("./");
+        if path.ends_with(".map") && !path.contains("node_modules/") && !g.source_maps.iter().any(|s| s.resolved.as_deref() == Some(path)) {
+            let script = path.trim_end_matches(".map");
+            let mut r = SourceMapRef { script: script.to_string(), resolved: Some(path.to_string()), present: true, ..Default::default() };
+            if analysed.iter().any(|a| a.path == script) {
+                match input.files.iter().find(|f| f.path == path) {
+                    Some(f) => read_source_map(&mut r, &f.bytes, script, &mut source_budget, &mut g.limitations),
+                    None => mark_unreadable(&mut r, script, "it was listed but not loaded", &mut g.limitations),
+                }
             }
             g.source_maps.push(r);
         }

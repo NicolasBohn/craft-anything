@@ -162,7 +162,7 @@ fn a_malformed_or_unloaded_map_leaves_its_sources_uncertain() {
         ("malformed", graph_with(vec![("script-0.js", script), ("script-0.js.map", b"{\"version\":3,\"sources\":[")], &[])),
         ("not loaded", graph_with(vec![("script-0.js", script)], &["script-0.js.map"])),
         ("bad data URL", graph_with(vec![("script-0.js", b"//# sourceMappingURL=data:application/json;base64,!!!\n")], &[])),
-        ("stand-alone, not loaded", graph_with(vec![], &["lost.js.map"])),
+        ("stand-alone, not loaded", graph_with(vec![("script-0.js", b"run();\n")], &["script-0.js.map"])),
     ] {
         let map = &graph.source_maps[0];
         assert!(map.unreadable && map.sources.is_empty() && !map.sources_truncated, "{what}: {map:?}");
@@ -175,15 +175,42 @@ fn a_malformed_or_unloaded_map_leaves_its_sources_uncertain() {
 }
 
 #[test]
-fn a_stand_alone_map_is_read() {
+fn a_stand_alone_map_beside_its_script_is_read() {
     let map = serde_json::to_vec(&json!({"version": 3, "sources": ["src/a.js"], "mappings": ""})).unwrap();
-    let graph = graph_with(vec![("lost.js.map", map.as_slice())], &[]);
+    let graph = graph_with(vec![("dist/main.js", b"run();\n"), ("dist/main.js.map", map.as_slice())], &[]);
     let found = &graph.source_maps[0];
-    assert_eq!((found.script.as_str(), found.sources.as_slice(), found.unreadable), ("lost.js", ["src/a.js".to_string()].as_slice(), false));
+    assert_eq!((found.script.as_str(), found.sources.as_slice(), found.unreadable), ("dist/main.js", ["src/a.js".to_string()].as_slice(), false));
     let diff = diff_source_and_bundle(&source_graph(&["src/a.js", "src/b.js"]), &graph, 100);
     assert_eq!(diff["summary"]["matched"], 1, "{diff}");
     assert_eq!(diff["unmatched_sources"], json!(["src/b.js"]));
     assert_eq!(diff["source_map_unreadable"], false);
+}
+
+#[test]
+fn other_map_files_are_listed_but_not_read() {
+    let map = serde_json::to_vec(&json!({"version": 3, "sources": ["src/a.js"], "mappings": ""})).unwrap();
+    // A game level, a leftover map with no script beside it, and one not loaded.
+    let graph = graph_with(vec![("levels/world.map", b"P3 10 10"), ("old/gone.js.map", map.as_slice())], &["big/level.map"]);
+    assert_eq!(graph.source_maps.len(), 3);
+    assert!(graph.source_maps.iter().all(|m| m.sources.is_empty() && !m.unreadable && !m.sources_truncated));
+    assert!(!graph.limitations.iter().any(|(key, _)| key.starts_with("source_map")));
+    let diff = diff_source_and_bundle(&source_graph(&["src/a.js"]), &graph, 100);
+    assert_eq!(diff["unmatched_sources"], json!(["src/a.js"]));
+}
+
+#[test]
+fn a_map_listed_with_a_leading_dot_slash_is_read_once() {
+    // How the ZIP reader lists an entry named `./dist/main.js.map` it loaded as `dist/main.js.map`.
+    let map = serde_json::to_vec(&json!({"version": 3, "sources": ["src/a.js"], "mappings": ""})).unwrap();
+    let files = vec![
+        AppFile { path: "dist/main.js".into(), bytes: b"//# sourceMappingURL=main.js.map\n".to_vec() },
+        AppFile { path: "dist/main.js.map".into(), bytes: map },
+    ];
+    let listing = vec![("./dist/main.js".to_string(), 1), ("./dist/main.js.map".to_string(), 1)];
+    let graph = analyze_application(&AppInput { files, listing, ..Default::default() }, &AppOptions::default(), &|| false).unwrap();
+    assert_eq!(graph.source_maps.len(), 1, "{:?}", graph.source_maps);
+    assert_eq!(graph.source_maps[0].sources, ["src/a.js"]);
+    assert!(!graph.source_maps[0].unreadable);
 }
 
 #[test]
