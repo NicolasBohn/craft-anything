@@ -530,7 +530,7 @@ fn compare_source_to_bundle_tool(ctx: &mut Ctx<'_>, params: Value) -> Result<Too
         b = b
             .limitation(Limitation::new(
                 "source_map_inventory_truncated",
-                "Some source-map paths were omitted by inventory limits; sources without an observed match are uncertain, not confirmed absent.",
+                "Some source-map paths were omitted by inventory or source-map limits; sources without an observed match are uncertain, not confirmed absent.",
             ))
             .coverage(Coverage { status: CoverageStatus::Partial, ..Default::default() });
     }

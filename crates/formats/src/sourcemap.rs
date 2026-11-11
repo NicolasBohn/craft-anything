@@ -295,7 +295,8 @@ impl Entries {
         Ok(())
     }
 
-    /// Return the slots of entries that won't be kept after all.
+    /// Return the slots of entries that won't be kept after all. Callers drop those entries
+    /// first, so a replaced list and its replacement are never held together.
     fn give_back(&self, n: usize) {
         self.left.set(self.left.get().saturating_add(n));
     }
@@ -477,15 +478,15 @@ impl<'de> Visitor<'de> for RawMapSeed<'_> {
                 Field::File => raw.file = fields.next_value_seed(Any(MaybeStr))?,
                 Field::SourceRoot => raw.source_root = fields.next_value_seed(Any(MaybeStr))?,
                 Field::Sources => {
-                    self.0.give_back(raw.sources.len());
+                    self.0.give_back(std::mem::take(&mut raw.sources).len());
                     raw.sources = fields.next_value_seed(EntryList(self.0, MaybeStr))?;
                 }
                 Field::SourcesContent => {
-                    self.0.give_back(raw.sources_content.len());
+                    self.0.give_back(std::mem::take(&mut raw.sources_content).len());
                     raw.sources_content = fields.next_value_seed(EntryList(self.0, MaybeStr))?;
                 }
                 Field::Names => {
-                    self.0.give_back(raw.names.len());
+                    self.0.give_back(std::mem::take(&mut raw.names).len());
                     raw.names = fields.next_value_seed(EntryList(self.0, MaybeStr))?;
                 }
                 // `ignoreList` wins over `x_google_ignoreList` wherever either appears.
@@ -501,7 +502,7 @@ impl<'de> Visitor<'de> for RawMapSeed<'_> {
                 }
                 Field::Mappings => raw.mappings = fields.next_value_seed(Any(MaybeStr))?,
                 Field::Sections => {
-                    self.0.give_back(held_by(&raw.sections));
+                    self.0.give_back(held_by(&raw.sections.take()));
                     raw.sections = Some(fields.next_value_seed(Any(Sections(self.0)))?);
                 }
                 Field::Other => fields.next_value_seed(Skip)?,

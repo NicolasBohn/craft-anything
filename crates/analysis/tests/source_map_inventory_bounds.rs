@@ -132,3 +132,17 @@ fn a_map_refused_for_too_many_entries_leaves_its_sources_uncertain() {
     assert_eq!(diff["unmatched_sources"], json!([]), "a refused map confirms nothing absent: {diff}");
     assert_eq!(diff["uncertain_sources"], json!([{"source": "a.js", "reason": "source_map_inventory_truncated"}]));
 }
+
+#[test]
+fn a_map_refused_at_another_limit_leaves_its_sources_uncertain() {
+    // More generated lines than the parser keeps by default.
+    let lines = ";".repeat(craft_anything_formats::sourcemap::Limits::default().max_lines + 1);
+    let graph = graph_with_maps(vec![json!({"version": 3, "sources": ["a.js"], "mappings": lines})]);
+    assert!(graph.source_maps[0].sources_truncated);
+    assert!(graph.limitations.iter().any(|(key, message)| key == "source_map_inventory_truncated" && message.contains("generated lines")));
+    let diff = diff_source_and_bundle(&source_graph(&["a.js"]), &graph, 100);
+    assert_eq!(diff["uncertain_sources"], json!([{"source": "a.js", "reason": "source_map_inventory_truncated"}]));
+    // A malformed map is unchanged: its sources are still read as absent.
+    let broken = graph_with_maps(vec![json!({"version": 2, "sources": ["a.js"], "mappings": ""})]);
+    assert!(!broken.source_maps[0].sources_truncated);
+}

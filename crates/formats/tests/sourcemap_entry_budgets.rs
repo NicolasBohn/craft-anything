@@ -46,9 +46,13 @@ fn entries_a_repeated_key_replaces_give_their_slots_back() {
     assert_eq!(parse(first, with(2)).unwrap().ignore_list, vec![0]);
     let after = br#"{"version":3,"mappings":"","ignoreList":[0],"x_google_ignoreList":[0,0,0]}"#;
     assert_eq!(parse(after, with(1)).unwrap().ignore_list, vec![0]);
-    // A replaced sections array gives back its sections and what their maps held.
-    let sections = br#"{"version":3,"sections":[{"offset":{"line":0,"column":0},"map":{"version":3,"sources":["a"],"mappings":""}}],"sections":[]}"#;
-    assert!(parse(sections, with(2)).unwrap().sections.is_empty());
+    // A replaced sections array gives back its sections and what their maps held: without that,
+    // the second array would need slots four and five.
+    let sections = br#"{"version":3,"sections":[{"offset":{"line":0,"column":0},"map":{"version":3,"sources":["a"],"mappings":""}},{"offset":{"line":1,"column":0},"url":"b.map"}],"sections":[{"offset":{"line":0,"column":0},"url":"c.map"}]}"#;
+    assert_eq!(parse(sections, with(3)).unwrap().sections.len(), 1);
+    // So does a section's replaced map: one section, then one source instead of two.
+    let map = br#"{"version":3,"sections":[{"offset":{"line":0,"column":0},"map":{"version":3,"sources":["a","b"],"mappings":""},"map":{"version":3,"sources":["c"],"mappings":""}}]}"#;
+    assert_eq!(parse(map, with(3)).unwrap().sections[0].2.sources, vec![Some("c".to_string())]);
 }
 
 #[test]

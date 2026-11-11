@@ -953,13 +953,15 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
         if let Some(bytes) = map_bytes {
             r.present = true;
             let parsed = craft_anything_formats::sourcemap::parse(&bytes, craft_anything_formats::sourcemap::Limits::default());
-            // A map refused for holding more entries than the parser keeps is incomplete, not
-            // empty: its sources are uncertain, never confirmed missing.
-            if let Err(craft_anything_formats::sourcemap::SourceMapError::TooManyEntries(_)) = parsed {
+            // A map refused at one of the parser's limits is incomplete, not empty: its sources
+            // are uncertain, never confirmed missing.
+            if let Err(e) = &parsed
+                && is_limit(e)
+            {
                 r.sources_truncated = true;
                 g.limitations.push((
                     "source_map_inventory_truncated".into(),
-                    format!("The source map for {} has more entries than the parser keeps, so its sources are not listed.", a.path),
+                    format!("The source map for {} was not read within the source-map limits ({e}), so its sources are not listed.", a.path),
                 ));
             }
             if let Ok(map) = parsed {
@@ -1136,6 +1138,12 @@ pub(crate) mod tests_support {
     pub fn notes_graph() -> AppGraph {
         graph_of(fx::notes_app_files())
     }
+}
+
+/// A refusal at one of the source-map parser's limits, as opposed to a map that is malformed.
+fn is_limit(e: &craft_anything_formats::sourcemap::SourceMapError) -> bool {
+    use craft_anything_formats::sourcemap::SourceMapError as E;
+    matches!(e, E::TooLarge(..) | E::TooManySegments(_) | E::TooManyLines(_) | E::LineAllocationFailed | E::TooDeep(_) | E::TooManyEntries(_))
 }
 
 #[cfg(test)]
