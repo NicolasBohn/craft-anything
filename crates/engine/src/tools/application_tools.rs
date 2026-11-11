@@ -513,6 +513,7 @@ fn compare_source_to_bundle_tool(ctx: &mut Ctx<'_>, params: Value) -> Result<Too
         s["matched"], s["source_scripts"], s["unmatched_sources"], s["uncertain_sources"], s["bundle_units_without_source"]
     );
     let inventory_truncated = d["source_map_inventory_truncated"].as_bool().unwrap_or(false);
+    let map_unreadable = d["source_map_unreadable"].as_bool().unwrap_or(false);
     let mut b = EvidenceBuilder::new(
         "js_source_bundle_compare",
         Subject { kind: "source-bundle-pair".into(), sha256: None, name: Some(format!("{} vs {}", src.label, app.label)) },
@@ -531,6 +532,14 @@ fn compare_source_to_bundle_tool(ctx: &mut Ctx<'_>, params: Value) -> Result<Too
             .limitation(Limitation::new(
                 "source_map_inventory_truncated",
                 "Some source-map paths were omitted by inventory or source-map limits; sources without an observed match are uncertain, not confirmed absent.",
+            ))
+            .coverage(Coverage { status: CoverageStatus::Partial, ..Default::default() });
+    }
+    if map_unreadable {
+        b = b
+            .limitation(Limitation::new(
+                "source_map_unreadable",
+                "A source map was malformed or not loaded; sources without an observed match are uncertain, not confirmed absent.",
             ))
             .coverage(Coverage { status: CoverageStatus::Partial, ..Default::default() });
     }
@@ -870,6 +879,23 @@ mod tests {
         let c = call(&e, "js_source_bundle_compare", json!({"source": retained(&s), "application": dist})).unwrap();
         assert_eq!(c["result"]["summary"]["matched"], 2, "{}", c["result"]);
         assert_eq!(c["confidence"], "inferred");
+    }
+
+    #[test]
+    fn source_comparison_discloses_an_unreadable_map() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("reference");
+        fx::write_files(&src, &[("src/kept.js", String::new())]).unwrap();
+        let dist = dir.path().join("dist");
+        fx::write_files(&dist, &[("main.js", "//# sourceMappingURL=main.js.map\n".to_string()), ("main.js.map", "{\"version\":2}".to_string())]).unwrap();
+        let e = Engine::new(crate::testing::session());
+        let source = call(&e, "app_source_import", json!({"path": src})).unwrap();
+        let comparison = call(&e, "js_source_bundle_compare", json!({"source": retained(&source), "application": dist})).unwrap();
+        assert_eq!(comparison["result"]["source_map_unreadable"], true);
+        assert_eq!(comparison["result"]["unmatched_sources"], json!([]));
+        assert_eq!(comparison["result"]["uncertain_sources"], json!([{"source": "src/kept.js", "reason": "source_map_unreadable"}]));
+        assert!(comparison["limitations"].as_array().unwrap().iter().any(|l| l["code"] == "source_map_unreadable"));
+        assert_eq!(comparison["coverage"]["status"], "partial");
     }
 
     #[test]

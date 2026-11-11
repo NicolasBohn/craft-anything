@@ -318,6 +318,7 @@ struct Unit<'a> {
 #[serde(rename_all = "snake_case")]
 enum SourceMatchUncertainty {
     SourceMapInventoryTruncated,
+    SourceMapUnreadable,
 }
 
 #[derive(Serialize)]
@@ -327,8 +328,9 @@ struct UncertainSource<'a> {
 }
 
 /// Match reference source files to the shipped bundle's files and bundle modules.
-/// An incomplete source-map inventory cannot establish that an otherwise unmatched source is absent.
-/// Such sources are reported separately in `uncertain_sources`; positive matches remain available.
+/// An incomplete source-map inventory, or a map that couldn't be read, cannot establish that an
+/// otherwise unmatched source is absent. Such sources are reported separately in
+/// `uncertain_sources`; positive matches remain available.
 pub fn diff_source_and_bundle(src: &SourceGraph, app: &AppGraph, max_rows: usize) -> Value {
     let mut units: Vec<Unit<'_>> = Vec::new();
     for m in app.modules.iter().filter(|m| m.kind == "script") {
@@ -355,6 +357,7 @@ pub fn diff_source_and_bundle(src: &SourceGraph, app: &AppGraph, max_rows: usize
     }
     // Source-map sources → generated script.
     let source_map_inventory_truncated = app.source_maps.iter().any(|sm| sm.sources_truncated);
+    let source_map_unreadable = app.source_maps.iter().any(|sm| sm.unreadable);
     let mut mapped: Vec<(String, &str)> = Vec::new();
     for sm in &app.source_maps {
         for s in &sm.sources {
@@ -442,6 +445,7 @@ pub fn diff_source_and_bundle(src: &SourceGraph, app: &AppGraph, max_rows: usize
                 None if source_map_inventory_truncated => {
                     uncertain.push(UncertainSource { source: &f.path, reason: SourceMatchUncertainty::SourceMapInventoryTruncated })
                 }
+                None if source_map_unreadable => uncertain.push(UncertainSource { source: &f.path, reason: SourceMatchUncertainty::SourceMapUnreadable }),
                 None => unmatched.push(f.path.clone()),
             },
         }
@@ -457,6 +461,7 @@ pub fn diff_source_and_bundle(src: &SourceGraph, app: &AppGraph, max_rows: usize
         "source_graph_id": src.source_graph_id,
         "graph_id": app.graph_id,
         "source_map_inventory_truncated": source_map_inventory_truncated,
+        "source_map_unreadable": source_map_unreadable,
         "summary": {"source_scripts": src.files.iter().filter(|f| is_script(&f.path)).count(), "bundle_units": units.len(), "matched": matches.len(), "unmatched_sources": unmatched.len(), "uncertain_sources": uncertain.len(), "bundle_units_without_source": unclaimed.len(), "by_quality": by_quality},
         "matches": matches,
         "unmatched_sources": unmatched,

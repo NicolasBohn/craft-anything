@@ -142,7 +142,55 @@ fn a_map_refused_at_another_limit_leaves_its_sources_uncertain() {
     assert!(graph.limitations.iter().any(|(key, message)| key == "source_map_inventory_truncated" && message.contains("generated lines")));
     let diff = diff_source_and_bundle(&source_graph(&["a.js"]), &graph, 100);
     assert_eq!(diff["uncertain_sources"], json!([{"source": "a.js", "reason": "source_map_inventory_truncated"}]));
-    // A malformed map is unchanged: its sources are still read as absent.
+    // A malformed map is unreadable, not truncated.
     let broken = graph_with_maps(vec![json!({"version": 2, "sources": ["a.js"], "mappings": ""})]);
     assert!(!broken.source_maps[0].sources_truncated);
+    assert!(broken.source_maps[0].unreadable);
+}
+
+fn graph_with(files: Vec<(&str, &[u8])>, listed_only: &[&str]) -> AppGraph {
+    let files: Vec<_> = files.into_iter().map(|(path, bytes)| AppFile { path: path.into(), bytes: bytes.to_vec() }).collect();
+    let mut listing: Vec<_> = files.iter().map(|file| (file.path.clone(), file.bytes.len() as u64)).collect();
+    listing.extend(listed_only.iter().map(|path| ((*path).to_string(), 1)));
+    analyze_application(&AppInput { files, listing, ..Default::default() }, &AppOptions::default(), &|| false).unwrap()
+}
+
+#[test]
+fn a_malformed_or_unloaded_map_leaves_its_sources_uncertain() {
+    let script = b"//# sourceMappingURL=script-0.js.map\n".as_slice();
+    for (what, graph) in [
+        ("malformed", graph_with(vec![("script-0.js", script), ("script-0.js.map", b"{\"version\":3,\"sources\":[")], &[])),
+        ("not loaded", graph_with(vec![("script-0.js", script)], &["script-0.js.map"])),
+        ("bad data URL", graph_with(vec![("script-0.js", b"//# sourceMappingURL=data:application/json;base64,!!!\n")], &[])),
+        ("stand-alone, not loaded", graph_with(vec![], &["lost.js.map"])),
+    ] {
+        let map = &graph.source_maps[0];
+        assert!(map.unreadable && map.sources.is_empty() && !map.sources_truncated, "{what}: {map:?}");
+        assert!(graph.limitations.iter().any(|(key, _)| key == "source_map_unreadable"), "{what}");
+        let diff = diff_source_and_bundle(&source_graph(&["a.js"]), &graph, 100);
+        assert_eq!(diff["unmatched_sources"], json!([]), "{what}: {diff}");
+        assert_eq!(diff["uncertain_sources"], json!([{"source": "a.js", "reason": "source_map_unreadable"}]), "{what}");
+        assert_eq!(diff["source_map_unreadable"], true, "{what}");
+    }
+}
+
+#[test]
+fn a_stand_alone_map_is_read() {
+    let map = serde_json::to_vec(&json!({"version": 3, "sources": ["src/a.js"], "mappings": ""})).unwrap();
+    let graph = graph_with(vec![("lost.js.map", map.as_slice())], &[]);
+    let found = &graph.source_maps[0];
+    assert_eq!((found.script.as_str(), found.sources.as_slice(), found.unreadable), ("lost.js", ["src/a.js".to_string()].as_slice(), false));
+    let diff = diff_source_and_bundle(&source_graph(&["src/a.js", "src/b.js"]), &graph, 100);
+    assert_eq!(diff["summary"]["matched"], 1, "{diff}");
+    assert_eq!(diff["unmatched_sources"], json!(["src/b.js"]));
+    assert_eq!(diff["source_map_unreadable"], false);
+}
+
+#[test]
+fn graphs_saved_before_unreadable_maps_load() {
+    let graph = graph_with_maps(vec![json!({"version": 3, "sources": ["a.js"], "mappings": ""})]);
+    let mut saved = serde_json::to_value(&graph).unwrap();
+    saved["source_maps"][0].as_object_mut().unwrap().remove("unreadable");
+    let restored: AppGraph = serde_json::from_value(saved).unwrap();
+    assert!(!restored.source_maps[0].unreadable);
 }

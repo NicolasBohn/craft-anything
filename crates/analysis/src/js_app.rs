@@ -167,6 +167,9 @@ pub struct SourceMapRef {
     pub sources_truncated: bool,
     #[serde(default)]
     pub sources_with_content: usize,
+    /// The map exists but couldn't be read (malformed, or not loaded), so its sources are unknown.
+    #[serde(default)]
+    pub unreadable: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -952,54 +955,30 @@ pub fn analyze_application(input: &AppInput, opts: &AppOptions, cancelled: &dyn 
         };
         if let Some(bytes) = map_bytes {
             r.present = true;
-            let parsed = craft_anything_formats::sourcemap::parse(&bytes, craft_anything_formats::sourcemap::Limits::default());
-            // A map refused at one of the parser's limits is incomplete, not empty: its sources
-            // are uncertain, never confirmed missing.
-            if let Err(e) = &parsed
-                && is_limit(e)
-            {
-                r.sources_truncated = true;
-                g.limitations.push((
-                    "source_map_inventory_truncated".into(),
-                    format!("The source map for {} was not read within the source-map limits ({e}), so its sources are not listed.", a.path),
-                ));
-            }
-            if let Ok(map) = parsed {
-                let inventory = map.source_inventory(craft_anything_formats::sourcemap::InventoryLimits {
-                    max_sources: source_budget.max_sources.min(5000),
-                    max_bytes: source_budget.max_bytes,
-                });
-                source_budget.max_sources = source_budget.max_sources.saturating_sub(inventory.sources.len());
-                source_budget.max_bytes = inventory.sources.iter().fold(source_budget.max_bytes, |left, source| left.saturating_sub(source.len()));
-                r.sources = inventory.sources;
-                r.sources_truncated = inventory.truncated;
-                if r.sources_truncated {
-                    g.limitations.push((
-                        "source_map_inventory_truncated".into(),
-                        format!("Some source paths for {} could not be retained within the source-map inventory limits.", a.path),
-                    ));
-                }
-                r.sources_with_content = map.sources_content.iter().filter(|c| c.is_some()).count();
-            }
+            read_source_map(&mut r, &bytes, &a.path, &mut source_budget, &mut g.limitations);
             if let Some(res) = &r.resolved {
                 let to = b.node(module_id(res), "source-map", res.clone(), Some(res), None, Value::Null);
                 b.edge(Some(&module_id(&a.path)), to.as_deref(), "source-map");
             }
+        } else if r.inline {
+            mark_unreadable(&mut r, &a.path, "its data URL could not be decoded", &mut g.limitations);
         } else {
             r.present = file_set.contains(r.resolved.as_deref().unwrap_or(""));
+            if r.present {
+                mark_unreadable(&mut r, &a.path, "it was listed but not loaded", &mut g.limitations);
+            }
         }
         g.source_maps.push(r);
     }
     // Stand-alone .map files without a comment pointing at them.
     for (p, _) in &input.listing {
         if p.ends_with(".map") && !p.contains("node_modules/") && !g.source_maps.iter().any(|s| s.resolved.as_deref() == Some(p.as_str())) {
-            g.source_maps.push(SourceMapRef {
-                script: p.trim_end_matches(".map").to_string(),
-                url: String::new(),
-                resolved: Some(p.clone()),
-                present: true,
-                ..Default::default()
-            });
+            let mut r = SourceMapRef { script: p.trim_end_matches(".map").to_string(), resolved: Some(p.clone()), present: true, ..Default::default() };
+            match input.files.iter().find(|f| f.path == *p) {
+                Some(f) => read_source_map(&mut r, &f.bytes, p, &mut source_budget, &mut g.limitations),
+                None => mark_unreadable(&mut r, p, "it was listed but not loaded", &mut g.limitations),
+            }
+            g.source_maps.push(r);
         }
     }
     // Native binaries present in the listing.
@@ -1138,6 +1117,50 @@ pub(crate) mod tests_support {
     pub fn notes_graph() -> AppGraph {
         graph_of(fx::notes_app_files())
     }
+}
+
+/// Read a map's sources into `r`, sharing `budget` across the application's maps. A map that
+/// can't be read leaves its sources unknown, never confirmed absent.
+fn read_source_map(
+    r: &mut SourceMapRef,
+    bytes: &[u8],
+    script: &str,
+    budget: &mut craft_anything_formats::sourcemap::InventoryLimits,
+    limitations: &mut Vec<(String, String)>,
+) {
+    match craft_anything_formats::sourcemap::parse(bytes, craft_anything_formats::sourcemap::Limits::default()) {
+        Ok(map) => {
+            let inventory = map.source_inventory(craft_anything_formats::sourcemap::InventoryLimits {
+                max_sources: budget.max_sources.min(5000),
+                max_bytes: budget.max_bytes,
+            });
+            budget.max_sources = budget.max_sources.saturating_sub(inventory.sources.len());
+            budget.max_bytes = inventory.sources.iter().fold(budget.max_bytes, |left, source| left.saturating_sub(source.len()));
+            r.sources = inventory.sources;
+            r.sources_truncated = inventory.truncated;
+            if r.sources_truncated {
+                limitations.push((
+                    "source_map_inventory_truncated".into(),
+                    format!("Some source paths for {script} could not be retained within the source-map inventory limits."),
+                ));
+            }
+            r.sources_with_content = map.sources_content.iter().filter(|c| c.is_some()).count();
+        }
+        // Refused at one of the parser's limits: incomplete rather than unreadable.
+        Err(e) if is_limit(&e) => {
+            r.sources_truncated = true;
+            limitations.push((
+                "source_map_inventory_truncated".into(),
+                format!("The source map for {script} was not read within the source-map limits ({e}), so its sources are not listed."),
+            ));
+        }
+        Err(e) => mark_unreadable(r, script, &format!("it is malformed ({e})"), limitations),
+    }
+}
+
+fn mark_unreadable(r: &mut SourceMapRef, script: &str, why: &str, limitations: &mut Vec<(String, String)>) {
+    r.unreadable = true;
+    limitations.push(("source_map_unreadable".into(), format!("The source map for {script} could not be read: {why}. Its sources are not listed.")));
 }
 
 /// A refusal at one of the source-map parser's limits, as opposed to a map that is malformed.
