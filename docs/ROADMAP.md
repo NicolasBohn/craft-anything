@@ -2182,7 +2182,7 @@ Owner: open · Status: in progress
       comment pointing at it still leave their sources looking absent in an application graph: say they couldn't be read,
       so a source comparison doesn't confirm those sources missing.
       — claimed: NicolasBohn, branch bugfix/r3.12-unreadable-source-maps
-- [ ] A source map refused for bad mappings or sections still has a readable `sources` list: keep those sources with a
+- [x] A source map refused for bad mappings or sections still has a readable `sources` list: keep those sources with a
       warning instead of reporting the whole map unreadable.
       — claimed: NicolasBohn, branch bugfix/r3.12-sources-of-bad-mappings
 - [x] Keep source map annotation URL suffixes intact.

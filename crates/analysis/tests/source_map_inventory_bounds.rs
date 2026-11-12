@@ -236,3 +236,29 @@ fn graphs_saved_before_unreadable_maps_load() {
     let restored: AppGraph = serde_json::from_value(saved).unwrap();
     assert!(!restored.source_maps[0].unreadable);
 }
+
+#[test]
+fn a_map_with_broken_mappings_or_section_offsets_keeps_its_sources() {
+    let section = |line: u32, source: &str| json!({"offset": {"line": line, "column": 0}, "map": {"version": 3, "sources": [source], "mappings": "AAAA"}});
+    for (what, map) in [
+        ("bad mappings", json!({"version": 3, "sources": ["a.js"], "mappings": "!!!"})),
+        ("sections out of order", json!({"version": 3, "sections": [section(1, "a.js"), section(0, "b.js")]})),
+        (
+            "bad mappings in a section",
+            json!({"version": 3, "sections": [{"offset": {"line": 0, "column": 0}, "map": {"version": 3, "sources": ["a.js"], "mappings": "!"}}]}),
+        ),
+    ] {
+        let graph = graph_with_maps(vec![map]);
+        let found = &graph.source_maps[0];
+        assert!(!found.unreadable && !found.sources_truncated && found.sources.first().is_some_and(|s| s == "a.js"), "{what}: {found:?}");
+        assert!(graph.limitations.iter().any(|(key, _)| key == "source_map_mappings_unreadable"), "{what}");
+        assert!(!graph.limitations.iter().any(|(key, _)| key == "source_map_unreadable"), "{what}");
+        // The list is whole, so a source it doesn't name is missing, not uncertain.
+        let diff = diff_source_and_bundle(&source_graph(&["a.js", "c.js"]), &graph, 100);
+        assert_eq!(diff["unmatched_sources"], json!(["c.js"]), "{what}: {diff}");
+        assert_eq!(diff["uncertain_sources"], json!([]), "{what}");
+    }
+    // A section with neither a map nor a URL says nothing about its sources.
+    let graph = graph_with_maps(vec![json!({"version": 3, "sections": [section(0, "a.js"), {"offset": {"line": 1, "column": 0}}]})]);
+    assert!(graph.source_maps[0].unreadable && graph.source_maps[0].sources.is_empty());
+}
