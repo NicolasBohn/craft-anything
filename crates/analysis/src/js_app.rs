@@ -1143,7 +1143,7 @@ fn read_source_map(
         Err(SourceMapError::BadMappings(_) | SourceMapError::BadSections) => parse_sources(bytes, Limits::default()).inspect(|_| {
             limitations.push((
                 "source_map_mappings_unreadable".into(),
-                format!("The source map for {script} has malformed mappings or section offsets; only its list of sources was read."),
+                format!("The source map for {script} has malformed mappings or section offsets; its sources are listed, but its mappings were not read."),
             ));
         }),
         read => read,

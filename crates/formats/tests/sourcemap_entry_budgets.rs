@@ -123,10 +123,10 @@ fn sources_are_read_from_a_map_with_broken_mappings_or_offsets() {
     assert_eq!(parse(bad, Limits::default()), Err(SourceMapError::BadMappings(1)));
     let map = parse_sources(bad, Limits::default()).unwrap();
     assert_eq!((map.source_path(0).as_deref(), map.sources_content.len(), map.names.len(), map.lines.len()), (Some("src/a.js"), 1, 1, 0));
-    let unordered = br#"{"version":3,"sections":[{"offset":{"line":2,"column":0},"map":{"version":3,"sources":["a.js"],"mappings":"AAAA"}},{"offset":{"line":-1,"column":0},"url":"b.map"},{"offset":{"line":0,"column":0},"map":{"version":3,"sources":["c.js"],"mappings":"!"}}]}"#;
+    let unordered = br#"{"version":3,"sections":[{"offset":{"line":2,"column":0},"map":{"version":3,"sources":["a.js"],"mappings":"AAAA"}},{"offset":{"line":-1,"column":0},"map":{"version":3,"sources":["b.js"],"mappings":""}},{"offset":{"line":0,"column":0},"map":{"version":3,"sources":["c.js"],"mappings":"!"}}]}"#;
     assert_eq!(parse(unordered, Limits::default()), Err(SourceMapError::BadSections));
     let map = parse_sources(unordered, Limits::default()).unwrap();
-    assert_eq!(map.source_inventory(Default::default()).sources, vec!["a.js".to_string(), "c.js".to_string()]);
+    assert_eq!(map.source_inventory(Default::default()).sources, vec!["a.js".to_string(), "b.js".to_string(), "c.js".to_string()]);
     // Past mappings that can't be decoded, the indices aren't known.
     assert_eq!(parse_sources(br#"{"version":3,"sources":["a"],"mappings":"AAAA,!,ACAA"}"#, Limits::default()).unwrap().sources.len(), 1);
     // What a section holds must still be known, and the version and limits still apply.
@@ -138,6 +138,7 @@ fn sources_are_read_from_a_map_with_broken_mappings_or_offsets() {
         // Mappings that name a source past the end of the list show it is short.
         (br#"{"version":3,"mappings":"AAAA"}"#, 9, SourceMapError::BadMappings(1)),
         (br#"{"version":3,"sources":["a"],"mappings":"AAAA;ACAA,!"}"#, 9, SourceMapError::BadMappings(2)),
+        (br#"{"version":3,"sources":["a"],"mappings":"AAAA,ADAA,AEAA"}"#, 9, SourceMapError::BadMappings(3)),
     ] {
         assert_eq!(parse_sources(json, with(limit)), Err(err), "{}", String::from_utf8_lossy(json));
     }

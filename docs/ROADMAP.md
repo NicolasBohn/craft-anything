@@ -2185,6 +2185,8 @@ Owner: open · Status: in progress
 - [x] A source map refused for bad mappings or sections still has a readable `sources` list: keep those sources with a
       warning instead of reporting the whole map unreadable.
       — claimed: NicolasBohn, branch bugfix/r3.12-sources-of-bad-mappings
+- [ ] An index-map section that points at an external map (`url`) adds no sources, so an application graph still
+      treats the map's list as complete: mark those sources uncertain until the external map is read.
 - [x] Keep source map annotation URL suffixes intact.
       — claimed: Plastic-time, branch rrfz/bugfix-r3.12-annotation-20261110
 - [x] Keep DOS relocations inside the declared executable header.

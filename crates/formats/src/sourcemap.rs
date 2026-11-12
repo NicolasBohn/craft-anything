@@ -225,8 +225,8 @@ pub fn parse(json: &[u8], limits: Limits) -> Result<SourceMap, SourceMapError> {
 /// Read a map's sources, their content, names and ignore list without decoding its mappings or
 /// checking its section offsets, so a map [`parse`] refuses for those
 /// ([`SourceMapError::BadMappings`] or [`SourceMapError::BadSections`]) can still list its sources.
-/// The map has no lines or segments. A map whose mappings name a source past the end of its
-/// `sources` list is still refused, since the list is known to be short, and so are a section
+/// The map has no lines or segments. A map whose mappings, as far as they decode, name a source
+/// past the end of its `sources` list is still refused, since the list is known to be short, and so are a section
 /// that has neither a map nor a URL, or both, and a `sections` value that isn't an array.
 pub fn parse_sources(json: &[u8], limits: Limits) -> Result<SourceMap, SourceMapError> {
     read(json, limits, false)
@@ -775,7 +775,8 @@ fn past_sources(m: &str, sources: usize) -> Option<usize> {
             continue;
         }
         src += vlq(bytes, &mut pos)?;
-        if usize::try_from(src).ok()? >= sources {
+        // A negative index is wrong too, but the deltas after it still decode.
+        if usize::try_from(src).is_ok_and(|src| src >= sources) {
             return Some(count);
         }
         while !at_end(pos) {
