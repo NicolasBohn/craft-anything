@@ -225,8 +225,9 @@ pub fn parse(json: &[u8], limits: Limits) -> Result<SourceMap, SourceMapError> {
 /// Read a map's sources, their content, names and ignore list without decoding its mappings or
 /// checking its section offsets, so a map [`parse`] refuses for those
 /// ([`SourceMapError::BadMappings`] or [`SourceMapError::BadSections`]) can still list its sources.
-/// The map has no lines or segments. A section that has neither a map nor a URL, or both, and a
-/// `sections` value that isn't an array are still refused: what they hold isn't known.
+/// The map has no lines or segments. A map whose mappings name a source past the end of its
+/// `sources` list is still refused, since the list is known to be short, and so are a section
+/// that has neither a map nor a URL, or both, and a `sections` value that isn't an array.
 pub fn parse_sources(json: &[u8], limits: Limits) -> Result<SourceMap, SourceMapError> {
     read(json, limits, false)
 }
@@ -295,8 +296,11 @@ fn from_raw(
         }
         return Ok(map);
     }
+    let m = raw.mappings.as_deref().unwrap_or_default();
     if mappings {
-        decode_mappings(raw.mappings.as_deref().unwrap_or_default(), &mut map, budget, line_budget, limits.max_lines)?;
+        decode_mappings(m, &mut map, budget, line_budget, limits.max_lines)?;
+    } else if let Some(count) = past_sources(m, map.sources.len()) {
+        return Err(SourceMapError::BadMappings(count));
     }
     Ok(map)
 }
@@ -752,6 +756,33 @@ fn decode_mappings(m: &str, map: &mut SourceMap, budget: &mut usize, line_budget
     }
     map.segments = count;
     Ok(())
+}
+
+/// The segment, counted as [`decode_mappings`] does, that names a source past the end of a list
+/// of `sources`. Mappings that can't be decoded end the search: past them nothing is known.
+fn past_sources(m: &str, sources: usize) -> Option<usize> {
+    let bytes = m.as_bytes();
+    let (mut pos, mut src, mut count) = (0usize, 0i64, 0usize);
+    let at_end = |pos: usize| matches!(bytes.get(pos), None | Some(b',') | Some(b';'));
+    while pos < bytes.len() {
+        if matches!(bytes[pos], b',' | b';') {
+            pos += 1;
+            continue;
+        }
+        count += 1;
+        vlq(bytes, &mut pos)?;
+        if at_end(pos) {
+            continue;
+        }
+        src += vlq(bytes, &mut pos)?;
+        if usize::try_from(src).ok()? >= sources {
+            return Some(count);
+        }
+        while !at_end(pos) {
+            vlq(bytes, &mut pos)?;
+        }
+    }
+    None
 }
 
 /// Find the `sourceMappingURL` comment near the end of a script.

@@ -127,12 +127,17 @@ fn sources_are_read_from_a_map_with_broken_mappings_or_offsets() {
     assert_eq!(parse(unordered, Limits::default()), Err(SourceMapError::BadSections));
     let map = parse_sources(unordered, Limits::default()).unwrap();
     assert_eq!(map.source_inventory(Default::default()).sources, vec!["a.js".to_string(), "c.js".to_string()]);
+    // Past mappings that can't be decoded, the indices aren't known.
+    assert_eq!(parse_sources(br#"{"version":3,"sources":["a"],"mappings":"AAAA,!,ACAA"}"#, Limits::default()).unwrap().sources.len(), 1);
     // What a section holds must still be known, and the version and limits still apply.
     for (json, limit, err) in [
         (br#"{"version":3,"sections":[{"offset":{"line":0,"column":0}}]}"#.as_slice(), 9, SourceMapError::BadSections),
         (br#"{"version":3,"sections":{}}"#, 9, SourceMapError::BadSections),
         (br#"{"version":3,"sections":[{"offset":{"line":0,"column":0},"map":{"version":2,"sources":["a"]}}]}"#, 9, SourceMapError::BadVersion),
         (br#"{"version":3,"sources":["a","b"],"mappings":"!"}"#, 1, SourceMapError::TooManyEntries(1)),
+        // Mappings that name a source past the end of the list show it is short.
+        (br#"{"version":3,"mappings":"AAAA"}"#, 9, SourceMapError::BadMappings(1)),
+        (br#"{"version":3,"sources":["a"],"mappings":"AAAA;ACAA,!"}"#, 9, SourceMapError::BadMappings(2)),
     ] {
         assert_eq!(parse_sources(json, with(limit)), Err(err), "{}", String::from_utf8_lossy(json));
     }

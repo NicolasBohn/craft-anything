@@ -1140,9 +1140,11 @@ fn read_source_map(
     let map = match parse(bytes, Limits::default()) {
         // The mappings or section offsets are broken, but the list of sources may still be
         // whole, and the list is all that is kept here.
-        Err(e @ (SourceMapError::BadMappings(_) | SourceMapError::BadSections)) => parse_sources(bytes, Limits::default()).inspect(|_| {
-            let why = if e == SourceMapError::BadSections { "invalid section offsets".to_string() } else { format!("malformed mappings ({e})") };
-            limitations.push(("source_map_mappings_unreadable".into(), format!("The source map for {script} has {why}; only its list of sources was read.")));
+        Err(SourceMapError::BadMappings(_) | SourceMapError::BadSections) => parse_sources(bytes, Limits::default()).inspect(|_| {
+            limitations.push((
+                "source_map_mappings_unreadable".into(),
+                format!("The source map for {script} has malformed mappings or section offsets; only its list of sources was read."),
+            ));
         }),
         read => read,
     };

@@ -258,7 +258,17 @@ fn a_map_with_broken_mappings_or_section_offsets_keeps_its_sources() {
         assert_eq!(diff["unmatched_sources"], json!(["c.js"]), "{what}: {diff}");
         assert_eq!(diff["uncertain_sources"], json!([]), "{what}");
     }
-    // A section with neither a map nor a URL says nothing about its sources.
-    let graph = graph_with_maps(vec![json!({"version": 3, "sections": [section(0, "a.js"), {"offset": {"line": 1, "column": 0}}]})]);
-    assert!(graph.source_maps[0].unreadable && graph.source_maps[0].sources.is_empty());
+    // A list the mappings show is short, and a section with neither a map nor a URL, say nothing
+    // about the sources.
+    for map in [
+        json!({"version": 3, "mappings": "AAAA"}),
+        json!({"version": 3, "sources": ["a.js"], "mappings": "ACAA"}),
+        json!({"version": 3, "sources": ["a.js"], "mappings": "AAAA,ACAA,!"}),
+        json!({"version": 3, "sections": [section(0, "a.js"), {"offset": {"line": 1, "column": 0}}]}),
+    ] {
+        let graph = graph_with_maps(vec![map.clone()]);
+        assert!(graph.source_maps[0].unreadable && graph.source_maps[0].sources.is_empty(), "{map}");
+        let diff = diff_source_and_bundle(&source_graph(&["c.js"]), &graph, 100);
+        assert_eq!(diff["unmatched_sources"], json!([]), "{map}");
+    }
 }
