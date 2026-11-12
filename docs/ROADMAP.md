@@ -2184,6 +2184,7 @@ Owner: open · Status: in progress
       — claimed: NicolasBohn, branch bugfix/r3.12-unreadable-source-maps
 - [ ] A source map refused for bad mappings or sections still has a readable `sources` list: keep those sources with a
       warning instead of reporting the whole map unreadable.
+      — claimed: NicolasBohn, branch bugfix/r3.12-sources-of-bad-mappings
 - [x] Keep source map annotation URL suffixes intact.
       — claimed: Plastic-time, branch rrfz/bugfix-r3.12-annotation-20261110
 - [x] Keep DOS relocations inside the declared executable header.
