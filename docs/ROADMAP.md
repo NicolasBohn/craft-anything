@@ -1570,7 +1570,7 @@ Gaps found while using the app for real projects.
       — claimed: hichang4u, branch bugfix/r2.9-config-not-loaded
 - [ ] When config.toml wasn't loaded (`Settings::not_loaded`), the app says so only in the log and
       when a save fails: say it at startup where the person is looking, with the file's name
-- [ ] A config.toml that can't be read for a moment at startup (a virus scan or another program
+- [x] A config.toml that can't be read for a moment at startup (a virus scan or another program
       holding it) isn't tried again, so the whole session runs on defaults and refuses every save:
       try the read again for a short while before giving up
       — claimed: NicolasBohn, branch bugfix/r2.9-config-read-retry
