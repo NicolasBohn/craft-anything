@@ -2241,6 +2241,7 @@ Owner: open · Status: in progress
 - [ ] A valid ASAR header written as `{ "files": ...` (a space) or with another key first is not
       recognized by the format-dispatch `looks_like_asar`, though the ASAR reader accepts it; use
       one predicate.
+      — claimed: NicolasBohn, branch bugfix/r3.12-one-asar-predicate
       — claimed: Afloat16, branch bugfix/r3.12-pe-optional-header-framing-20261105
 - [x] Bound import descriptor walks by mapped file bytes and report incomplete metadata. Normal imports keep
       following the terminator when their declared size is short or zero; delay-load and bound metadata
